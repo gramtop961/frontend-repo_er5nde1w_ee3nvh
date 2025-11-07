@@ -1,27 +1,60 @@
 import { useState } from "react";
 import { UploadCloud, Building2, ShieldCheck } from "lucide-react";
 
+const API = import.meta.env.VITE_BACKEND_URL || "";
+
 export default function ReviewForm() {
   const [company, setCompany] = useState("");
   const [relationship, setRelationship] = useState("dipendente");
   const [rating, setRating] = useState(4);
   const [text, setText] = useState("");
   const [fileName, setFileName] = useState("");
+  const [file, setFile] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState("");
 
   const handleFile = (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setFileName(file.name);
+    const f = e.target.files?.[0];
+    if (!f) return;
+    setFile(f);
+    setFileName(f.name);
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    // Per ora simuliamo l'invio: in una fase successiva collegheremo il backend
-    alert("Recensione inviata per: " + company + " (verifica in corso)");
-    setCompany("");
-    setRating(4);
-    setText("");
-    setFileName("");
+    setLoading(true);
+    setMessage("");
+    try {
+      let proof_id = null;
+      if (file) {
+        const fd = new FormData();
+        fd.append("file", file);
+        const res = await fetch(`${API}/api/proof`, { method: "POST", body: fd });
+        if (!res.ok) throw new Error("Upload fallito");
+        const data = await res.json();
+        proof_id = data.id;
+      }
+
+      const form = new FormData();
+      form.append("company", company);
+      form.append("relationship", relationship);
+      form.append("rating", String(rating));
+      form.append("text", text);
+      if (proof_id) form.append("proof_id", proof_id);
+
+      const res2 = await fetch(`${API}/api/reviews`, { method: "POST", body: form });
+      if (!res2.ok) throw new Error("Invio recensione fallito");
+      setMessage("Recensione inviata. In attesa di moderazione.");
+      setCompany("");
+      setRating(4);
+      setText("");
+      setFileName("");
+      setFile(null);
+    } catch (err) {
+      setMessage(err.message || "Errore");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -103,10 +136,11 @@ export default function ReviewForm() {
 
             <div className="flex items-center justify-between">
               <p className="text-xs text-slate-500">Caricando un documento accetti che verrà usato solo per verificare la tua appartenenza e non sarà mai pubblicato.</p>
-              <button type="submit" className="inline-flex items-center px-5 py-2.5 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 font-medium">
-                Invia recensione
+              <button disabled={loading} type="submit" className="inline-flex items-center px-5 py-2.5 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 font-medium disabled:opacity-60">
+                {loading ? "Invio..." : "Invia recensione"}
               </button>
             </div>
+            {message && <div className="text-sm text-slate-700">{message}</div>}
           </form>
         </div>
       </div>
